@@ -4,13 +4,15 @@ from flask_cors import CORS
 import os
 import io
 import base64
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image
 import numpy as np
 import cv2
-from ultralytics import YOLO
 import json
 from datetime import datetime
 import uuid
+
+# Import modelu v1
+from modelv1 import detector as modelv1_detector
 
 # Import nowego systemu detekcji anomalii
 try:
@@ -27,7 +29,6 @@ CORS(app)
 UPLOAD_FOLDER = '../data/uploads'
 RESULTS_FOLDER = '../data/results'
 ANOMALY_REPORTS_FOLDER = '../data/anomaly_reports'
-MODEL_PATH = "modelv1/runs/detect/vehicle_anomaly/weights/best.pt"
 REFERENCE_DIR = "../data/czyste"  # Katalog z obrazami wzorcowymi
 
 # Create directories
@@ -35,51 +36,8 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(RESULTS_FOLDER, exist_ok=True)
 os.makedirs(ANOMALY_REPORTS_FOLDER, exist_ok=True)
 
-# Global model variables
-model = None
+# Global variables
 anomaly_system = None
-
-def draw_enhanced_bbox(image, box, confidence, detection_id=1, color=(0, 0, 255)):
-    """Draw enhanced bounding box with better visibility"""
-    x1, y1, x2, y2 = map(int, box)
-    
-    # Draw main rectangle
-    cv2.rectangle(image, (x1, y1), (x2, y2), color, 3)
-    
-    # Draw corner markers for better visibility
-    corner_size = 15
-    corner_thickness = 4
-    
-    # Top-left corner
-    cv2.line(image, (x1, y1), (x1 + corner_size, y1), color, corner_thickness)
-    cv2.line(image, (x1, y1), (x1, y1 + corner_size), color, corner_thickness)
-    
-    # Top-right corner
-    cv2.line(image, (x2, y1), (x2 - corner_size, y1), color, corner_thickness)
-    cv2.line(image, (x2, y1), (x2, y1 + corner_size), color, corner_thickness)
-    
-    # Bottom-left corner
-    cv2.line(image, (x1, y2), (x1 + corner_size, y2), color, corner_thickness)
-    cv2.line(image, (x1, y2), (x1, y2 - corner_size), color, corner_thickness)
-    
-    # Bottom-right corner
-    cv2.line(image, (x2, y2), (x2 - corner_size, y2), color, corner_thickness)
-    cv2.line(image, (x2, y2), (x2, y2 - corner_size), color, corner_thickness)
-    
-    # Label with ID only
-    label_text = f"#{detection_id}"
-    font_scale = 0.8
-    font_thickness = 2
-    (text_width, text_height), _ = cv2.getTextSize(label_text, cv2.FONT_HERSHEY_SIMPLEX, font_scale, font_thickness)
-    
-    # Draw label background
-    cv2.rectangle(image, (x1, y1 - text_height - 15), (x1 + text_width + 10, y1), color, -1)
-    
-    # Draw label text
-    cv2.putText(image, label_text, (x1 + 5, y1 - 8), 
-                cv2.FONT_HERSHEY_SIMPLEX, font_scale, (255, 255, 255), font_thickness)
-    
-    return image
 
 @app.route('/api/health', methods=['GET'])
 def health_check():
@@ -88,24 +46,16 @@ def health_check():
 
 @app.route('/api/load-model', methods=['POST'])
 def load_model():
-    """Load YOLO model"""
-    global model
+    """Load YOLO model v1"""
     try:
-        data = request.get_json() if request.get_json() else {}
-        model_path = data.get('model_path', MODEL_PATH)
+        result = modelv1_detector.load_model()
         
-        # Load the model from specified path
-        model = YOLO(model_path)
-        model.to('cpu')  # Force CPU usage
-        return jsonify({
-            "message": f"Model loaded successfully on CPU: {model_path}",
-            "model_path": model_path,
-            "model_type": "custom_trained",
-            "device": "cpu",
-            "timestamp": datetime.now().isoformat()
-        })
+        if result["success"]:
+            return jsonify(result)
+        else:
+            return jsonify(result), 500
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route('/api/upload', methods=['POST'])
 def upload_image():
@@ -139,11 +89,10 @@ def upload_image():
 
 @app.route('/api/analyze', methods=['POST'])
 def analyze_image():
-    """Analyze uploaded image for anomalies"""
-    global model
-    
+    """Analyze uploaded image for anomalies using model v1"""
     try:
-        if model is None:
+        # Sprawdź czy model jest załadowany
+        if not modelv1_detector.is_model_loaded():
             return jsonify({"error": "Model not loaded. Please load a model first."}), 400
         
         data = request.get_json()
@@ -159,71 +108,79 @@ def analyze_image():
         
         filepath = os.path.join(UPLOAD_FOLDER, uploaded_files[0])
         
-        # Load image
+        # Wywołaj detekcję przez model v1
+        result = modelv1_detector.detect_anomalies(filepath)
+        
+        if not result["success"]:
+            return jsonify(result), 500
+        
+        # Przygotuj obrazy dla frontendu
         image = Image.open(filepath).convert('L')
         image_np = np.array(image)
-        
-        # Run YOLO prediction with very low threshold to detect anomalies
-        results = model.predict(
-            filepath, 
-            imgsz=640,   # Lower resolution for better performance
-            conf=0.05,   # Very low confidence threshold - adjust based on results
-            iou=0.3,     # Lower IoU to get more overlapping detections
-            max_det=300, # Allow more detections
-            save=False,
-            device='cpu',  # Force CPU usage
-            verbose=False
-        )
-        
-        # Process results
-        detections = []
         annotated_image = cv2.cvtColor(image_np, cv2.COLOR_GRAY2BGR)
         
-        if results[0].boxes is not None and len(results[0].boxes) > 0:
-            for i, box in enumerate(results[0].boxes):
-                xyxy = box.xyxy[0].cpu().numpy().astype(int)
-                conf = float(box.conf[0].cpu().numpy())
-                cls = int(box.cls[0].cpu().numpy()) if box.cls is not None else 0
-                
-                # Get class name
-                class_name = model.names[cls] if hasattr(model, 'names') and cls in model.names else "anomaly"
-                
-                # Zawsze czerwony kolor dla wykrytych anomalii
-                color = (0, 0, 255)  # Red - Always red for anomalies
-                
-                # Add detection to list
-                detections.append({
-                    "id": i + 1,
-                    "bbox": [int(xyxy[0]), int(xyxy[1]), int(xyxy[2]), int(xyxy[3])],
-                    "confidence": round(conf, 3),
-                    "class": class_name,
-                    "class_id": cls,
-                    "area": int((xyxy[2] - xyxy[0]) * (xyxy[3] - xyxy[1])),
-                    "center": [int((xyxy[0] + xyxy[2]) / 2), int((xyxy[1] + xyxy[3]) / 2)]
-                })
-                
-                # Draw enhanced bounding box with ID
-                annotated_image = draw_enhanced_bbox(
-                    annotated_image, xyxy, conf, i + 1, color
-                )
+        # Narysuj wykrycia na obrazie
+        for detection in result["detections"]:
+            bbox = detection["bbox"]
+            x1, y1, x2, y2 = bbox
+            detection_id = detection["id"]
+            color = (0, 0, 255)  # Czerwony
+            
+            # Narysuj prostokąt
+            cv2.rectangle(annotated_image, (x1, y1), (x2, y2), color, 3)
+            
+            # Narysuj markery w rogach
+            corner_size = 15
+            corner_thickness = 4
+            
+            # Lewy górny róg
+            cv2.line(annotated_image, (x1, y1), (x1 + corner_size, y1), color, corner_thickness)
+            cv2.line(annotated_image, (x1, y1), (x1, y1 + corner_size), color, corner_thickness)
+            
+            # Prawy górny róg
+            cv2.line(annotated_image, (x2, y1), (x2 - corner_size, y1), color, corner_thickness)
+            cv2.line(annotated_image, (x2, y1), (x2, y1 + corner_size), color, corner_thickness)
+            
+            # Lewy dolny róg
+            cv2.line(annotated_image, (x1, y2), (x1 + corner_size, y2), color, corner_thickness)
+            cv2.line(annotated_image, (x1, y2), (x1, y2 - corner_size), color, corner_thickness)
+            
+            # Prawy dolny róg
+            cv2.line(annotated_image, (x2, y2), (x2 - corner_size, y2), color, corner_thickness)
+            cv2.line(annotated_image, (x2, y2), (x2, y2 - corner_size), color, corner_thickness)
+            
+            # Etykieta
+            label_text = f"#{detection_id}"
+            font_scale = 0.8
+            font_thickness = 2
+            (text_width, text_height), _ = cv2.getTextSize(label_text, cv2.FONT_HERSHEY_SIMPLEX, font_scale, font_thickness)
+            
+            # Tło etykiety
+            cv2.rectangle(annotated_image, (x1, y1 - text_height - 15), (x1 + text_width + 10, y1), color, -1)
+            
+            # Tekst etykiety
+            cv2.putText(annotated_image, label_text, (x1 + 5, y1 - 8), 
+                       cv2.FONT_HERSHEY_SIMPLEX, font_scale, (255, 255, 255), font_thickness)
         
-        # Save annotated image
+        # Zapisz wynik
         result_filename = f"result_{file_id}.png"
         result_path = os.path.join(RESULTS_FOLDER, result_filename)
         cv2.imwrite(result_path, annotated_image)
         
-        # Convert images to base64 for frontend
+        # Konwertuj obrazy do base64
         original_b64 = image_to_base64(image_np)
         annotated_b64 = image_to_base64(annotated_image)
         
         return jsonify({
             "analysis_complete": True,
-            "detections": detections,
-            "detection_count": len(detections),
+            "detections": result["detections"],
+            "detection_count": result["detection_count"],
+            "has_anomaly": result["has_anomaly"],
             "original_image": original_b64,
             "annotated_image": annotated_b64,
             "result_path": result_path,
-            "timestamp": datetime.now().isoformat()
+            "model_info": result["model_info"],
+            "timestamp": result["timestamp"]
         })
     
     except Exception as e:
@@ -381,11 +338,12 @@ def detector_status():
     Sprawdź status systemu detekcji
     """
     return jsonify({
-        "yolo_model_loaded": model is not None,
+        "yolo_model_loaded": modelv1_detector.is_model_loaded(),
         "comparison_detector_available": ANOMALY_DETECTOR_AVAILABLE,
         "comparison_detector_initialized": anomaly_system is not None,
         "reference_dir": REFERENCE_DIR,
         "reference_dir_exists": os.path.exists(REFERENCE_DIR),
+        "model_info": modelv1_detector.get_model_info(),
         "timestamp": datetime.now().isoformat()
     })
 
@@ -395,10 +353,13 @@ def download_report(file_id):
     """Download analysis report as JSON"""
     try:
         # Implementation for generating and downloading reports
+        model_info = modelv1_detector.get_model_info()
+        
         report_data = {
             "file_id": file_id,
             "analysis_date": datetime.now().isoformat(),
-            "model_used": MODEL_PATH,
+            "model_used": model_info.get("model_path", "unknown"),
+            "model_type": model_info.get("model_type", "unknown"),
             "status": "Analysis completed"
         }
         
