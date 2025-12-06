@@ -35,10 +35,6 @@ instance/
 uploads/
 results/
 
-# Model files
-runs/
-*.pt
-*.weights
 
 # OS
 .DS_Store
