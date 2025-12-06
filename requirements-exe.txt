@@ -1,0 +1,29 @@
+# Requirements dla kompilacji EXE - kompatybilne z Windows i Linux
+# Podstawowe zależności z backend/requirements.txt
+opencv-python-headless>=4.8.0
+pillow>=10.0.0
+numpy>=1.24.0
+tqdm>=4.65.0
+matplotlib>=3.7.0
+reportlab>=4.0.0
+flask>=2.3.0
+flask-cors>=4.0.0
+requests>=2.31.0
+pyyaml>=6.0.0
+scipy>=1.11.0
+ultralytics>=8.0.0
+
+# Dodatkowe dla kompilacji
+pyinstaller>=5.13.0
+pyinstaller-hooks-contrib>=2023.7
+scikit-image>=0.21.0
+
+# Dla lepszej kompatybilności Windows/Linux
+wheel>=0.41.0
+setuptools>=68.0.0
+altgraph>=0.17.0
+pefile>=2023.2.7
+
+# Torch dependencies (potrzebne dla ultralytics)
+torch>=2.0.0
+torchvision>=0.15.0
