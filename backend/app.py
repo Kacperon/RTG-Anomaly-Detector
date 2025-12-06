@@ -12,7 +12,7 @@ from datetime import datetime
 import uuid
 
 # Import modelu v1
-from modelv1 import detector as modelv1_detector
+from modelv2 import detector as model_detector
 
 # Import nowego systemu detekcji anomalii
 try:
@@ -46,9 +46,9 @@ def health_check():
 
 @app.route('/api/load-model', methods=['POST'])
 def load_model():
-    """Load YOLO model v1"""
+    """Load YOLO model"""
     try:
-        result = modelv1_detector.load_model()
+        result = model_detector.load_model()
         
         if result["success"]:
             return jsonify(result)
@@ -92,7 +92,7 @@ def analyze_image():
     """Analyze uploaded image for anomalies using model v1"""
     try:
         # Sprawdź czy model jest załadowany
-        if not modelv1_detector.is_model_loaded():
+        if not model_detector.is_model_loaded():
             return jsonify({"error": "Model not loaded. Please load a model first."}), 400
         
         data = request.get_json()
@@ -109,7 +109,7 @@ def analyze_image():
         filepath = os.path.join(UPLOAD_FOLDER, uploaded_files[0])
         
         # Wywołaj detekcję przez model v1
-        result = modelv1_detector.detect_anomalies(filepath)
+        result = model_detector.detect_anomalies(filepath)
         
         if not result["success"]:
             return jsonify(result), 500
@@ -338,12 +338,12 @@ def detector_status():
     Sprawdź status systemu detekcji
     """
     return jsonify({
-        "yolo_model_loaded": modelv1_detector.is_model_loaded(),
+        "yolo_model_loaded": model_detector.is_model_loaded(),
         "comparison_detector_available": ANOMALY_DETECTOR_AVAILABLE,
         "comparison_detector_initialized": anomaly_system is not None,
         "reference_dir": REFERENCE_DIR,
         "reference_dir_exists": os.path.exists(REFERENCE_DIR),
-        "model_info": modelv1_detector.get_model_info(),
+        "model_info": model_detector.get_model_info(),
         "timestamp": datetime.now().isoformat()
     })
 
@@ -353,7 +353,7 @@ def download_report(file_id):
     """Download analysis report as JSON"""
     try:
         # Implementation for generating and downloading reports
-        model_info = modelv1_detector.get_model_info()
+        model_info = model_detector.get_model_info()
         
         report_data = {
             "file_id": file_id,
