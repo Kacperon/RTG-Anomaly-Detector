@@ -1,0 +1,7 @@
+names:
+- anomaly
+nc: 1
+path: ./data
+test: images/train
+train: images/train
+val: images/train
