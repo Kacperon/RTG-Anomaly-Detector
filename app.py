@@ -18,7 +18,7 @@ CORS(app)
 # Configuration
 UPLOAD_FOLDER = 'uploads'
 RESULTS_FOLDER = 'results'
-MODEL_PATH = "runs/detect/vehicle_anomaly2/weights/best.pt"  # Updated path
+MODEL_PATH = "runs/detect/vehicle_anomaly3/weights/best.pt"  # Updated to latest training
 FALLBACK_MODEL = "yolov8n.pt"
 
 # Create directories
@@ -165,15 +165,16 @@ def analyze_image():
         image = Image.open(filepath).convert('L')
         image_np = np.array(image)
         
-        # Run YOLO prediction with optimized parameters on CPU
+        # Run YOLO prediction with very low threshold to detect anomalies
         results = model.predict(
             filepath, 
-            imgsz=1280, 
-            conf=0.15,  # Lower confidence threshold for better detection
-            iou=0.45,   # IoU threshold for NMS
-            max_det=100, # More detections allowed
+            imgsz=640,   # Lower resolution for better performance
+            conf=0.05,   # Very low confidence threshold - adjust based on results
+            iou=0.3,     # Lower IoU to get more overlapping detections
+            max_det=300, # Allow more detections
             save=False,
-            device='cpu'  # Force CPU usage
+            device='cpu',  # Force CPU usage
+            verbose=False
         )
         
         # Process results
