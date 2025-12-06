@@ -34,9 +34,34 @@ const ResultsPanel = ({ results, uploadedFile, onAnalysisComplete, isAnalyzing }
         <h3 className="text-lg font-semibold text-gray-900 mb-4">
           Wyniki analizy
         </h3>
-        <div className="text-center text-gray-500 py-8">
-          <FileText className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-          <p>Załaduj obraz aby rozpocząć analizę</p>
+        
+        {/* Pusta tabelka */}
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  ID
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Typ
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Pewność
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Pozycja
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              <tr>
+                <td colSpan="4" className="px-4 py-8 text-center text-gray-400 text-sm">
+                  Brak danych - załaduj obraz i rozpocznij analizę
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
     );
@@ -68,13 +93,38 @@ const ResultsPanel = ({ results, uploadedFile, onAnalysisComplete, isAnalyzing }
         <h3 className="text-lg font-semibold text-gray-900 mb-4">
           Wyniki analizy
         </h3>
-        <div className="text-center text-gray-500 py-8">
-          <button
-            className="bg-primary-600 hover:bg-primary-700 text-white font-medium py-3 px-6 rounded-lg transition-colors"
-            onClick={() => {/* This would trigger analysis */}}
-          >
-            Rozpocznij analizę
-          </button>
+        
+        {/* Pusta tabelka z nagłówkiem */}
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  ID
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Typ
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Pewność
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Pozycja
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              <tr>
+                <td colSpan="4" className="px-4 py-8 text-center text-gray-400 text-sm">
+                  Oczekiwanie na analizę...
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        
+        <div className="mt-4 text-center text-sm text-gray-500">
+          <p>Kliknij "Rozpocznij analizę" aby wykryć anomalie</p>
         </div>
       </div>
     );
@@ -82,17 +132,47 @@ const ResultsPanel = ({ results, uploadedFile, onAnalysisComplete, isAnalyzing }
 
   const hasAnomalies = results.detection_count > 0;
 
+  // Funkcja pobierania raportu
+  const downloadReport = async (format) => {
+    try {
+      if (format === 'image' && results.annotated_image) {
+        // Pobierz obraz z adnotacjami
+        const link = document.createElement('a');
+        link.href = `data:image/png;base64,${results.annotated_image}`;
+        link.download = `raport_rtg_${new Date().getTime()}.png`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      } else if (format === 'json') {
+        // Pobierz dane JSON
+        const dataStr = JSON.stringify(results, null, 2);
+        const dataBlob = new Blob([dataStr], { type: 'application/json' });
+        const url = URL.createObjectURL(dataBlob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `raport_rtg_${new Date().getTime()}.json`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      }
+    } catch (error) {
+      console.error('Błąd pobierania:', error);
+      alert('Błąd podczas pobierania raportu');
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Summary Card */}
       <div className="bg-white rounded-lg shadow-sm p-6">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold text-gray-900">
-            Podsumowanie analizy
+            Podsumowanie
           </h3>
-          <div className={`flex items-center space-x-2 px-3 py-1 rounded-full text-sm ${
+          <div className={`flex items-center space-x-2 px-3 py-1 rounded-full text-sm font-medium ${
             hasAnomalies 
-              ? 'bg-orange-100 text-orange-800' 
+              ? 'bg-red-100 text-red-800' 
               : 'bg-green-100 text-green-800'
           }`}>
             {hasAnomalies ? (
@@ -106,88 +186,127 @@ const ResultsPanel = ({ results, uploadedFile, onAnalysisComplete, isAnalyzing }
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div className="bg-gray-50 rounded-lg p-4">
-            <div className="text-2xl font-bold text-gray-900">
+        <div className="grid grid-cols-1 gap-3">
+          <div className="bg-gray-50 rounded-lg p-4 text-center">
+            <div className="text-3xl font-bold text-gray-900">
               {results.detection_count}
             </div>
-            <div className="text-sm text-gray-600">Wykryte anomalie</div>
+            <div className="text-sm text-gray-600 mt-1">Wykryte anomalie</div>
           </div>
           
-          <div className="bg-gray-50 rounded-lg p-4">
-            <div className="text-2xl font-bold text-gray-900">
-              {results.detections.length > 0 
-                ? Math.max(...results.detections.map(d => d.confidence)).toFixed(2)
-                : '0.00'
-              }
+          {results.detections.length > 0 && (
+            <div className="bg-gray-50 rounded-lg p-4 text-center">
+              <div className="text-3xl font-bold text-blue-600">
+                {Math.max(...results.detections.map(d => d.confidence)).toFixed(2)}
+              </div>
+              <div className="text-sm text-gray-600 mt-1">Maksymalna pewność</div>
             </div>
-            <div className="text-sm text-gray-600">Najwyższa pewność</div>
-          </div>
+          )}
         </div>
       </div>
 
-      {/* Detections List */}
-      {hasAnomalies && (
-        <div className="bg-white rounded-lg shadow-sm p-6">
-          <h4 className="text-lg font-semibold text-gray-900 mb-4">
-            Szczegóły wykryć
-          </h4>
-          
-          <div className="space-y-3">
-            {results.detections.map((detection, index) => (
-              <div 
-                key={index}
-                className="detection-box flex items-center justify-between p-3 bg-gray-50 rounded-lg"
-              >
-                <div className="flex items-center space-x-3">
-                  <div className={`w-3 h-3 rounded-full ${
-                    detection.confidence > 0.7 ? 'bg-red-500' : 
-                    detection.confidence > 0.4 ? 'bg-orange-500' : 'bg-yellow-500'
-                  }`}></div>
-                  <div>
-                    <div className="font-medium text-gray-900">
-                      {detection.class || 'Anomalia'} #{detection.id || index + 1}
-                    </div>
-                    <div className="text-sm text-gray-600">
-                      Pozycja: ({detection.bbox[0]}, {detection.bbox[1]})
-                      {detection.area && ` • Obszar: ${detection.area}px²`}
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="text-right">
-                  <div className="font-medium text-gray-900">
-                    {(detection.confidence * 100).toFixed(1)}%
-                  </div>
-                  <div className="text-xs text-gray-500">pewność</div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Actions */}
+      {/* Results Table */}
       <div className="bg-white rounded-lg shadow-sm p-6">
         <h4 className="text-lg font-semibold text-gray-900 mb-4">
-          Akcje
+          Wykryte anomalie
+        </h4>
+        
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  ID
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Typ
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Pewność
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Pozycja (X, Y)
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {hasAnomalies ? (
+                results.detections.map((detection, index) => (
+                  <tr key={index} className="hover:bg-gray-50">
+                    <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
+                      #{detection.id || index + 1}
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">
+                      {detection.class || 'Anomalia'}
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm">
+                      <div className="flex items-center">
+                        <div className={`w-2 h-2 rounded-full mr-2 ${
+                          detection.confidence > 0.7 ? 'bg-red-500' : 
+                          detection.confidence > 0.4 ? 'bg-orange-500' : 'bg-yellow-500'
+                        }`}></div>
+                        <span className="font-medium text-gray-900">
+                          {(detection.confidence * 100).toFixed(1)}%
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">
+                      ({detection.bbox[0]}, {detection.bbox[1]})
+                      {detection.area && (
+                        <span className="text-xs text-gray-400 ml-2">
+                          {detection.area}px²
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan="4" className="px-4 py-8 text-center text-gray-500">
+                    <CheckCircle className="h-12 w-12 mx-auto mb-2 text-green-400" />
+                    <p className="font-medium">Nie wykryto żadnych anomalii</p>
+                    <p className="text-sm text-gray-400 mt-1">Obraz wydaje się być czysty</p>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Download Actions */}
+      <div className="bg-white rounded-lg shadow-sm p-6">
+        <h4 className="text-lg font-semibold text-gray-900 mb-4">
+          Pobierz raport
         </h4>
         
         <div className="space-y-3">
-          <button className="w-full flex items-center justify-center space-x-2 bg-primary-600 hover:bg-primary-700 text-white font-medium py-3 px-4 rounded-lg transition-colors">
-            <Download className="h-4 w-4" />
-            <span>Pobierz raport PDF</span>
+          <button 
+            onClick={() => downloadReport('image')}
+            className="w-full flex items-center justify-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg transition-colors"
+          >
+            <Download className="h-5 w-5" />
+            <span>Pobierz obraz z adnotacjami</span>
           </button>
           
-          <button className="w-full flex items-center justify-center space-x-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-3 px-4 rounded-lg transition-colors">
-            <FileText className="h-4 w-4" />
-            <span>Eksportuj dane JSON</span>
+          <button 
+            onClick={() => downloadReport('json')}
+            className="w-full flex items-center justify-center space-x-2 bg-gray-600 hover:bg-gray-700 text-white font-medium py-3 px-4 rounded-lg transition-colors"
+          >
+            <FileText className="h-5 w-5" />
+            <span>Pobierz dane JSON</span>
           </button>
         </div>
         
         <div className="mt-4 pt-4 border-t text-xs text-gray-500">
-          <p>Analiza zakończona: {new Date(results.timestamp).toLocaleString('pl-PL')}</p>
-          <p>Model: YOLOv8 RTG Anomaly Detector</p>
+          <p className="flex items-center justify-between">
+            <span>Analiza zakończona:</span>
+            <span className="font-medium">{new Date(results.timestamp).toLocaleString('pl-PL')}</span>
+          </p>
+          <p className="flex items-center justify-between mt-1">
+            <span>Model:</span>
+            <span className="font-medium">YOLOv8 RTG</span>
+          </p>
         </div>
       </div>
     </div>

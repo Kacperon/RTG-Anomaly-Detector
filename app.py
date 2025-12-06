@@ -12,21 +12,33 @@ import json
 from datetime import datetime
 import uuid
 
+# Import nowego systemu detekcji anomalii
+try:
+    from anomaly_detector import RTGAnomalySystem
+    ANOMALY_DETECTOR_AVAILABLE = True
+except ImportError:
+    ANOMALY_DETECTOR_AVAILABLE = False
+    print("⚠️ Moduł anomaly_detector niedostępny - używaj starego systemu YOLO")
+
 app = Flask(__name__)
 CORS(app)
 
 # Configuration
 UPLOAD_FOLDER = 'uploads'
 RESULTS_FOLDER = 'results'
+ANOMALY_REPORTS_FOLDER = 'anomaly_reports'
 MODEL_PATH = "runs/detect/vehicle_anomaly3/weights/best.pt"  # Updated to latest training
 FALLBACK_MODEL = "yolov8n.pt"
+REFERENCE_DIR = "data/czyste"  # Katalog z obrazami wzorcowymi
 
 # Create directories
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(RESULTS_FOLDER, exist_ok=True)
+os.makedirs(ANOMALY_REPORTS_FOLDER, exist_ok=True)
 
-# Global model variable
+# Global model variables
 model = None
+anomaly_system = None
 
 def draw_enhanced_bbox(image, box, confidence, label="anomaly", color=(0, 0, 255)):
     """Draw enhanced bounding box with better visibility"""
@@ -235,6 +247,167 @@ def analyze_image():
     
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+@app.route('/api/analyze-comparison', methods=['POST'])
+def analyze_image_comparison():
+    """
+    Nowy endpoint - Analiza obrazu poprzez porównanie z wzorcami
+    Znajduje najbardziej podobny obraz czysty i wykrywa anomalie na podstawie różnic
+    """
+    global anomaly_system
+    
+    try:
+        # Sprawdź czy system jest dostępny
+        if not ANOMALY_DETECTOR_AVAILABLE:
+            return jsonify({
+                "error": "System detekcji anomalii nie jest dostępny. Zainstaluj wymagane biblioteki (scipy, scikit-image)"
+            }), 503
+        
+        # Inicjalizuj system jeśli nie istnieje
+        if anomaly_system is None:
+            if not os.path.exists(REFERENCE_DIR):
+                return jsonify({
+                    "error": f"Katalog z obrazami wzorcowymi nie istnieje: {REFERENCE_DIR}"
+                }), 404
+            
+            try:
+                anomaly_system = RTGAnomalySystem(REFERENCE_DIR, ANOMALY_REPORTS_FOLDER)
+            except Exception as e:
+                return jsonify({
+                    "error": f"Nie można zainicjalizować systemu detekcji: {str(e)}"
+                }), 500
+        
+        # Pobierz dane z requestu
+        data = request.get_json()
+        file_id = data.get('file_id')
+        use_alignment = data.get('use_alignment', True)
+        use_ssim = data.get('use_ssim', True)
+        
+        if not file_id:
+            return jsonify({"error": "No file_id provided"}), 400
+        
+        # Znajdź plik
+        uploaded_files = [f for f in os.listdir(UPLOAD_FOLDER) if f.startswith(file_id)]
+        if not uploaded_files:
+            return jsonify({"error": "File not found"}), 404
+        
+        filepath = os.path.join(UPLOAD_FOLDER, uploaded_files[0])
+        
+        # Przetwórz obraz
+        result = anomaly_system.process_image(
+            filepath,
+            use_alignment=use_alignment,
+            use_ssim=use_ssim,
+            save_report=True
+        )
+        
+        # Wczytaj raport jako base64
+        report_b64 = None
+        if result.get('report_path') and os.path.exists(result['report_path']):
+            with open(result['report_path'], 'rb') as f:
+                report_b64 = base64.b64encode(f.read()).decode()
+        
+        # Przygotuj szczegółowe informacje o anomaliach
+        anomalies_detail = []
+        for i, anomaly in enumerate(result.get('anomalies', []), 1):
+            x, y, w, h = anomaly['bbox']
+            anomalies_detail.append({
+                "id": i,
+                "bbox": [x, y, x+w, y+h],  # Convert to [x1, y1, x2, y2]
+                "area": int(anomaly['area']),
+                "solidity": round(anomaly['solidity'], 3),
+                "aspect_ratio": round(anomaly['aspect_ratio'], 3),
+                "center": [x + w//2, y + h//2]
+            })
+        
+        return jsonify({
+            "method": "comparison_based",
+            "analysis_complete": True,
+            "has_anomaly": result['has_anomaly'],
+            "anomaly_count": result['anomaly_count'],
+            "anomalies": anomalies_detail,
+            "reference_match": result['reference_match'],
+            "similarity": round(result['similarity'], 4),
+            "ssim_score": round(result['ssim_score'], 4) if result.get('ssim_score') else None,
+            "report_image": report_b64,
+            "report_path": result.get('report_path'),
+            "settings": {
+                "alignment_used": use_alignment,
+                "ssim_used": use_ssim
+            },
+            "timestamp": datetime.now().isoformat()
+        })
+    
+    except Exception as e:
+        import traceback
+        return jsonify({
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }), 500
+
+
+@app.route('/api/batch-analyze', methods=['POST'])
+def batch_analyze():
+    """
+    Endpoint do przetwarzania wielu obrazów naraz
+    """
+    global anomaly_system
+    
+    try:
+        if not ANOMALY_DETECTOR_AVAILABLE:
+            return jsonify({"error": "System detekcji anomalii niedostępny"}), 503
+        
+        # Inicjalizuj system
+        if anomaly_system is None:
+            if not os.path.exists(REFERENCE_DIR):
+                return jsonify({"error": f"Katalog wzorcowy nie istnieje: {REFERENCE_DIR}"}), 404
+            anomaly_system = RTGAnomalySystem(REFERENCE_DIR, ANOMALY_REPORTS_FOLDER)
+        
+        # Pobierz parametry
+        data = request.get_json()
+        directory = data.get('directory', UPLOAD_FOLDER)
+        pattern = data.get('pattern', '*.bmp')
+        
+        if not os.path.exists(directory):
+            return jsonify({"error": f"Katalog nie istnieje: {directory}"}), 404
+        
+        # Przetwarzaj partię
+        results = anomaly_system.batch_process(directory, pattern)
+        
+        # Podsumowanie
+        anomaly_count = sum(1 for r in results if r.get('has_anomaly', False))
+        
+        return jsonify({
+            "batch_complete": True,
+            "total_processed": len(results),
+            "anomalies_found": anomaly_count,
+            "clean_images": len(results) - anomaly_count,
+            "results": results[:50],  # Ogranicz do 50 dla wydajności
+            "timestamp": datetime.now().isoformat()
+        })
+    
+    except Exception as e:
+        import traceback
+        return jsonify({
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }), 500
+
+
+@app.route('/api/detector-status', methods=['GET'])
+def detector_status():
+    """
+    Sprawdź status systemu detekcji
+    """
+    return jsonify({
+        "yolo_model_loaded": model is not None,
+        "comparison_detector_available": ANOMALY_DETECTOR_AVAILABLE,
+        "comparison_detector_initialized": anomaly_system is not None,
+        "reference_dir": REFERENCE_DIR,
+        "reference_dir_exists": os.path.exists(REFERENCE_DIR),
+        "timestamp": datetime.now().isoformat()
+    })
+
 
 @app.route('/api/download-report/<file_id>', methods=['GET'])
 def download_report(file_id):

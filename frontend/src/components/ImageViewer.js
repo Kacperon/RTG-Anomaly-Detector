@@ -84,14 +84,15 @@ const ImageViewer = ({ uploadedFile, analysisResults, isAnalyzing }) => {
         </div>
       </div>
 
-      <div className="relative bg-gray-100" style={{ height: '500px' }}>
+      <div className="relative bg-gray-100" style={{ height: '700px' }}>
         {!uploadedFile ? (
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="text-center">
-              <div className="w-16 h-16 bg-gray-200 rounded-lg mx-auto mb-4 flex items-center justify-center">
-                <FileImage className="h-8 w-8 text-gray-400" />
+              <div className="w-20 h-20 bg-gray-200 rounded-lg mx-auto mb-4 flex items-center justify-center">
+                <FileImage className="h-10 w-10 text-gray-400" />
               </div>
-              <p className="text-gray-500">Brak załadowanego obrazu</p>
+              <p className="text-gray-500 text-lg">Brak załadowanego obrazu</p>
+              <p className="text-gray-400 text-sm mt-2">Prześlij obraz RTG aby rozpocząć</p>
             </div>
           </div>
         ) : (

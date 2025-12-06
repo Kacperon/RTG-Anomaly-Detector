@@ -10,3 +10,5 @@ flask
 flask-cors
 requests
 pyyaml
+scipy
+scikit-image
