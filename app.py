@@ -40,7 +40,7 @@ os.makedirs(ANOMALY_REPORTS_FOLDER, exist_ok=True)
 model = None
 anomaly_system = None
 
-def draw_enhanced_bbox(image, box, confidence, label="anomaly", color=(0, 0, 255)):
+def draw_enhanced_bbox(image, box, confidence, detection_id=1, color=(0, 0, 255)):
     """Draw enhanced bounding box with better visibility"""
     x1, y1, x2, y2 = map(int, box)
     
@@ -67,8 +67,8 @@ def draw_enhanced_bbox(image, box, confidence, label="anomaly", color=(0, 0, 255
     cv2.line(image, (x2, y2), (x2 - corner_size, y2), color, corner_thickness)
     cv2.line(image, (x2, y2), (x2, y2 - corner_size), color, corner_thickness)
     
-    # Label background
-    label_text = f"{label}: {confidence:.2f}"
+    # Label with ID only
+    label_text = f"#{detection_id}"
     font_scale = 0.8
     font_thickness = 2
     (text_width, text_height), _ = cv2.getTextSize(label_text, cv2.FONT_HERSHEY_SIMPLEX, font_scale, font_thickness)
@@ -202,13 +202,8 @@ def analyze_image():
                 # Get class name
                 class_name = model.names[cls] if hasattr(model, 'names') and cls in model.names else "anomaly"
                 
-                # Color coding based on confidence
-                if conf > 0.7:
-                    color = (0, 0, 255)  # Red - High confidence
-                elif conf > 0.4:
-                    color = (0, 165, 255)  # Orange - Medium confidence  
-                else:
-                    color = (0, 255, 255)  # Yellow - Low confidence
+                # Zawsze czerwony kolor dla wykrytych anomalii
+                color = (0, 0, 255)  # Red - Always red for anomalies
                 
                 # Add detection to list
                 detections.append({
@@ -221,9 +216,9 @@ def analyze_image():
                     "center": [int((xyxy[0] + xyxy[2]) / 2), int((xyxy[1] + xyxy[3]) / 2)]
                 })
                 
-                # Draw enhanced bounding box
+                # Draw enhanced bounding box with ID
                 annotated_image = draw_enhanced_bbox(
-                    annotated_image, xyxy, conf, class_name, color
+                    annotated_image, xyxy, conf, i + 1, color
                 )
         
         # Save annotated image

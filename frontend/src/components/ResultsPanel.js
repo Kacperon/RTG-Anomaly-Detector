@@ -30,8 +30,8 @@ const ResultsPanel = ({ results, uploadedFile, onAnalysisComplete, isAnalyzing }
 
   if (!uploadedFile) {
     return (
-      <div className="bg-white rounded-lg shadow-sm p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">
+      <div className="bg-white rounded-lg shadow-sm p-6 overflow-hidden">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4 break-words">
           Wyniki analizy
         </h3>
         
@@ -44,9 +44,6 @@ const ResultsPanel = ({ results, uploadedFile, onAnalysisComplete, isAnalyzing }
                   ID
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Typ
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Pewność
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -56,7 +53,7 @@ const ResultsPanel = ({ results, uploadedFile, onAnalysisComplete, isAnalyzing }
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               <tr>
-                <td colSpan="4" className="px-4 py-8 text-center text-gray-400 text-sm">
+                <td colSpan="3" className="px-4 py-8 text-center text-gray-400 text-sm">
                   Brak danych - załaduj obraz i rozpocznij analizę
                 </td>
               </tr>
@@ -69,8 +66,8 @@ const ResultsPanel = ({ results, uploadedFile, onAnalysisComplete, isAnalyzing }
 
   if (isAnalyzing) {
     return (
-      <div className="bg-white rounded-lg shadow-sm p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">
+      <div className="bg-white rounded-lg shadow-sm p-6 overflow-hidden">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4 break-words">
           Wyniki analizy
         </h3>
         <div className="text-center py-8">
@@ -89,8 +86,8 @@ const ResultsPanel = ({ results, uploadedFile, onAnalysisComplete, isAnalyzing }
 
   if (!results) {
     return (
-      <div className="bg-white rounded-lg shadow-sm p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">
+      <div className="bg-white rounded-lg shadow-sm p-6 overflow-hidden">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4 break-words">
           Wyniki analizy
         </h3>
         
@@ -103,9 +100,6 @@ const ResultsPanel = ({ results, uploadedFile, onAnalysisComplete, isAnalyzing }
                   ID
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Typ
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Pewność
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -115,7 +109,7 @@ const ResultsPanel = ({ results, uploadedFile, onAnalysisComplete, isAnalyzing }
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               <tr>
-                <td colSpan="4" className="px-4 py-8 text-center text-gray-400 text-sm">
+                <td colSpan="3" className="px-4 py-8 text-center text-gray-400 text-sm">
                   Oczekiwanie na analizę...
                 </td>
               </tr>
@@ -163,14 +157,14 @@ const ResultsPanel = ({ results, uploadedFile, onAnalysisComplete, isAnalyzing }
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 overflow-hidden">
       {/* Summary Card */}
-      <div className="bg-white rounded-lg shadow-sm p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-gray-900">
+      <div className="bg-white rounded-lg shadow-sm p-6 overflow-hidden">
+        <div className="flex items-center justify-between mb-4 min-w-0">
+          <h3 className="text-lg font-semibold text-gray-900 break-words">
             Podsumowanie
           </h3>
-          <div className={`flex items-center space-x-2 px-3 py-1 rounded-full text-sm font-medium ${
+          <div className={`flex items-center space-x-2 px-3 py-1 rounded-full text-sm font-medium flex-shrink-0 ${
             hasAnomalies 
               ? 'bg-red-100 text-red-800' 
               : 'bg-green-100 text-green-800'
@@ -180,7 +174,7 @@ const ResultsPanel = ({ results, uploadedFile, onAnalysisComplete, isAnalyzing }
             ) : (
               <CheckCircle className="h-4 w-4" />
             )}
-            <span>
+            <span className="whitespace-nowrap">
               {hasAnomalies ? 'Wykryto anomalie' : 'Brak anomalii'}
             </span>
           </div>
@@ -206,8 +200,8 @@ const ResultsPanel = ({ results, uploadedFile, onAnalysisComplete, isAnalyzing }
       </div>
 
       {/* Results Table */}
-      <div className="bg-white rounded-lg shadow-sm p-6">
-        <h4 className="text-lg font-semibold text-gray-900 mb-4">
+      <div className="bg-white rounded-lg shadow-sm p-6 overflow-hidden">
+        <h4 className="text-lg font-semibold text-gray-900 mb-4 break-words">
           Wykryte anomalie
         </h4>
         
@@ -217,9 +211,6 @@ const ResultsPanel = ({ results, uploadedFile, onAnalysisComplete, isAnalyzing }
               <tr>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   ID
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Typ
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Pewność
@@ -235,9 +226,6 @@ const ResultsPanel = ({ results, uploadedFile, onAnalysisComplete, isAnalyzing }
                   <tr key={index} className="hover:bg-gray-50">
                     <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
                       #{detection.id || index + 1}
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">
-                      {detection.class || 'Anomalia'}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm">
                       <div className="flex items-center">
@@ -262,7 +250,7 @@ const ResultsPanel = ({ results, uploadedFile, onAnalysisComplete, isAnalyzing }
                 ))
               ) : (
                 <tr>
-                  <td colSpan="4" className="px-4 py-8 text-center text-gray-500">
+                  <td colSpan="3" className="px-4 py-8 text-center text-gray-500">
                     <CheckCircle className="h-12 w-12 mx-auto mb-2 text-green-400" />
                     <p className="font-medium">Nie wykryto żadnych anomalii</p>
                     <p className="text-sm text-gray-400 mt-1">Obraz wydaje się być czysty</p>
@@ -275,8 +263,8 @@ const ResultsPanel = ({ results, uploadedFile, onAnalysisComplete, isAnalyzing }
       </div>
 
       {/* Download Actions */}
-      <div className="bg-white rounded-lg shadow-sm p-6">
-        <h4 className="text-lg font-semibold text-gray-900 mb-4">
+      <div className="bg-white rounded-lg shadow-sm p-6 overflow-hidden">
+        <h4 className="text-lg font-semibold text-gray-900 mb-4 break-words">
           Pobierz raport
         </h4>
         

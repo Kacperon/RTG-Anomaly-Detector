@@ -16,36 +16,36 @@ const StatusPanel = ({ messages, modelLoaded, isAnalyzing }) => {
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-sm p-6">
-      <h3 className="text-lg font-semibold text-gray-900 mb-4">
+    <div className="bg-white rounded-lg shadow-sm p-6 overflow-hidden">
+      <h3 className="text-lg font-semibold text-gray-900 mb-4 break-words">
         Status systemu
       </h3>
       
       {/* System Status Indicators */}
       <div className="space-y-3 mb-6">
-        <div className="flex items-center justify-between">
-          <span className="text-sm text-gray-600">Model AI</span>
-          <div className={`flex items-center space-x-2 ${modelLoaded ? 'text-green-600' : 'text-gray-400'}`}>
+        <div className="flex items-center justify-between min-w-0">
+          <span className="text-sm text-gray-600 truncate">Model AI</span>
+          <div className={`flex items-center space-x-2 flex-shrink-0 ${modelLoaded ? 'text-green-600' : 'text-gray-400'}`}>
             {modelLoaded ? (
               <CheckCircle className="h-4 w-4" />
             ) : (
               <div className="h-4 w-4 border-2 border-gray-300 rounded-full"></div>
             )}
-            <span className="text-sm">
+            <span className="text-sm whitespace-nowrap">
               {modelLoaded ? 'Załadowany' : 'Niezaładowany'}
             </span>
           </div>
         </div>
         
-        <div className="flex items-center justify-between">
-          <span className="text-sm text-gray-600">Status analizy</span>
-          <div className={`flex items-center space-x-2 ${isAnalyzing ? 'text-blue-600' : 'text-gray-400'}`}>
+        <div className="flex items-center justify-between min-w-0">
+          <span className="text-sm text-gray-600 truncate">Status analizy</span>
+          <div className={`flex items-center space-x-2 flex-shrink-0 ${isAnalyzing ? 'text-blue-600' : 'text-gray-400'}`}>
             {isAnalyzing ? (
               <Clock className="h-4 w-4" />
             ) : (
               <div className="h-4 w-4 border-2 border-gray-300 rounded-full"></div>
             )}
-            <span className="text-sm">
+            <span className="text-sm whitespace-nowrap">
               {isAnalyzing ? 'W trakcie' : 'Gotowy'}
             </span>
           </div>
@@ -53,12 +53,12 @@ const StatusPanel = ({ messages, modelLoaded, isAnalyzing }) => {
       </div>
 
       {/* Activity Log */}
-      <div>
-        <h4 className="text-sm font-medium text-gray-900 mb-3">
+      <div className="min-w-0">
+        <h4 className="text-sm font-medium text-gray-900 mb-3 break-words">
           Dziennik aktywności
         </h4>
         
-        <div className="space-y-2 max-h-48 overflow-y-auto">
+        <div className="space-y-2 max-h-48 overflow-y-auto overflow-x-hidden">
           {messages.length === 0 ? (
             <p className="text-sm text-gray-500 italic">
               Brak aktywności
@@ -67,7 +67,7 @@ const StatusPanel = ({ messages, modelLoaded, isAnalyzing }) => {
             messages.slice(-10).reverse().map((message) => (
               <div 
                 key={message.id}
-                className="flex items-start space-x-2 text-sm"
+                className="flex items-start space-x-2 text-sm min-w-0"
               >
                 {getStatusIcon(message.type)}
                 <div className="flex-1 min-w-0">

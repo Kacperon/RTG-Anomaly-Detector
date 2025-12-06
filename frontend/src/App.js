@@ -77,14 +77,14 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 overflow-x-hidden">
       <Header />
       
       <main className="container mx-auto px-4 py-8 max-w-7xl">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           
           {/* Left Panel - Upload */}
-          <div className="lg:col-span-3 space-y-6">
+          <div className="lg:col-span-3 space-y-6 min-w-0 overflow-hidden">
             <UploadArea 
               onFileUpload={handleFileUpload}
               disabled={isAnalyzing}
@@ -98,7 +98,7 @@ function App() {
           </div>
 
           {/* Center Panel - Large Image Viewer */}
-          <div className="lg:col-span-6">
+          <div className="lg:col-span-6 min-w-0 overflow-hidden">
             <ImageViewer 
               uploadedFile={uploadedFile}
               analysisResults={analysisResults}
@@ -107,7 +107,7 @@ function App() {
           </div>
 
           {/* Right Panel - Results and Controls */}
-          <div className="lg:col-span-3 space-y-6">
+          <div className="lg:col-span-3 space-y-6 min-w-0 overflow-hidden">
             {uploadedFile && (
               <div className="bg-white rounded-lg shadow-sm p-6">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">

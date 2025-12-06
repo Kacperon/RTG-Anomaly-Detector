@@ -29,8 +29,8 @@ const UploadArea = ({ onFileUpload, disabled }) => {
   });
 
   return (
-    <div className="bg-white rounded-lg shadow-sm p-6">
-      <h2 className="text-xl font-semibold text-gray-900 mb-4">
+    <div className="bg-white rounded-lg shadow-sm p-6 overflow-hidden">
+      <h2 className="text-xl font-semibold text-gray-900 mb-4 break-words">
         Załaduj skan pojazdu
       </h2>
       
@@ -55,7 +55,7 @@ const UploadArea = ({ onFileUpload, disabled }) => {
             <FileImage className="mx-auto h-12 w-12 text-gray-400" />
           )}
           
-          <div>
+          <div className="break-words">
             <p className="text-lg font-medium text-gray-900">
               {isDragActive
                 ? 'Upuść plik tutaj'
@@ -69,7 +69,7 @@ const UploadArea = ({ onFileUpload, disabled }) => {
         </div>
       </div>
       
-      <div className="mt-4 text-xs text-gray-500">
+      <div className="mt-4 text-xs text-gray-500 break-words">
         <p>• Plik zostanie przesłany na serwer do analizy</p>
         <p>• Anomalie będą automatycznie zaznaczone na obrazie</p>
         <p>• Obsługiwane są skany pojazdów w odcieniach szarości</p>

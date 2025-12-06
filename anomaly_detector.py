@@ -409,18 +409,28 @@ class AnomalyReportGenerator:
         for i, anomaly in enumerate(anomalies):
             x, y, w, h = anomaly['bbox']
             
-            # Rysuj prostokąt
+            # Rysuj prostokąt - zawsze czerwony
             cv2.rectangle(annotated, (x, y), (x+w, y+h), (0, 0, 255), 3)
             
-            # Rysuj markery w rogach
+            # Rysuj markery w rogach - także czerwone (wszystkie rogi)
             corner_size = 15
-            cv2.line(annotated, (x, y), (x + corner_size, y), (0, 255, 255), 4)
-            cv2.line(annotated, (x, y), (x, y + corner_size), (0, 255, 255), 4)
+            # Lewy górny róg
+            cv2.line(annotated, (x, y), (x + corner_size, y), (0, 0, 255), 4)
+            cv2.line(annotated, (x, y), (x, y + corner_size), (0, 0, 255), 4)
+            # Prawy górny róg
+            cv2.line(annotated, (x+w, y), (x+w - corner_size, y), (0, 0, 255), 4)
+            cv2.line(annotated, (x+w, y), (x+w, y + corner_size), (0, 0, 255), 4)
+            # Lewy dolny róg
+            cv2.line(annotated, (x, y+h), (x + corner_size, y+h), (0, 0, 255), 4)
+            cv2.line(annotated, (x, y+h), (x, y+h - corner_size), (0, 0, 255), 4)
+            # Prawy dolny róg
+            cv2.line(annotated, (x+w, y+h), (x+w - corner_size, y+h), (0, 0, 255), 4)
+            cv2.line(annotated, (x+w, y+h), (x+w, y+h - corner_size), (0, 0, 255), 4)
             
-            # Etykieta
+            # Etykieta - czerwone tło, biały tekst
             label = f"A{i+1}: {anomaly['area']:.0f}px"
             cv2.putText(annotated, label, (x, y-10),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
         
         return annotated
     
