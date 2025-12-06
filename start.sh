@@ -17,7 +17,7 @@ source venv/bin/activate
 
 # Install Python dependencies
 echo "📋 Installing Python dependencies..."
-pip install -r requirements.txt
+pip install -r backend/requirements.txt
 
 # Check if Node.js is installed
 if ! command -v node &> /dev/null; then
@@ -36,7 +36,7 @@ cd ..
 
 # Create necessary directories
 echo "📁 Creating directories..."
-mkdir -p uploads results
+mkdir -p data/uploads data/results data/anomaly_reports
 
 echo ""
 echo "✅ Setup complete!"
@@ -46,8 +46,10 @@ echo ""
 
 # Start backend in background
 echo "🔧 Starting Flask backend (port 5000)..."
+cd backend
 python app.py &
 BACKEND_PID=$!
+cd ..
 
 # Wait a moment for backend to start
 sleep 3

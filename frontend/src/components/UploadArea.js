@@ -70,9 +70,7 @@ const UploadArea = ({ onFileUpload, disabled }) => {
       </div>
       
       <div className="mt-4 text-xs text-gray-500 break-words">
-        <p>• Plik zostanie przesłany na serwer do analizy</p>
-        <p>• Anomalie będą automatycznie zaznaczone na obrazie</p>
-        <p>• Obsługiwane są skany pojazdów w odcieniach szarości</p>
+        <p>• Plik zostanie przesłany na serwer </p>
       </div>
     </div>
   );

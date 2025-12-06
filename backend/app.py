@@ -24,12 +24,11 @@ app = Flask(__name__)
 CORS(app)
 
 # Configuration
-UPLOAD_FOLDER = 'uploads'
-RESULTS_FOLDER = 'results'
-ANOMALY_REPORTS_FOLDER = 'anomaly_reports'
-MODEL_PATH = "runs/detect/vehicle_anomaly3/weights/best.pt"  # Updated to latest training
-FALLBACK_MODEL = "yolov8n.pt"
-REFERENCE_DIR = "data/czyste"  # Katalog z obrazami wzorcowymi
+UPLOAD_FOLDER = '../data/uploads'
+RESULTS_FOLDER = '../data/results'
+ANOMALY_REPORTS_FOLDER = '../data/anomaly_reports'
+MODEL_PATH = "modelv1/runs/detect/vehicle_anomaly/weights/best.pt"
+REFERENCE_DIR = "../data/czyste"  # Katalog z obrazami wzorcowymi
 
 # Create directories
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
@@ -89,35 +88,22 @@ def health_check():
 
 @app.route('/api/load-model', methods=['POST'])
 def load_model():
-    """Load YOLO model with fallback"""
+    """Load YOLO model"""
     global model
     try:
         data = request.get_json() if request.get_json() else {}
         model_path = data.get('model_path', MODEL_PATH)
         
-        # Try to load custom trained model first
-        if os.path.exists(model_path):
-            model = YOLO(model_path)
-            model.to('cpu')  # Force CPU usage
-            return jsonify({
-                "message": f"Custom model loaded successfully on CPU: {model_path}",
-                "model_path": model_path,
-                "model_type": "custom_trained",
-                "device": "cpu",
-                "timestamp": datetime.now().isoformat()
-            })
-        else:
-            # Fallback to pre-trained model
-            model = YOLO(FALLBACK_MODEL)
-            model.to('cpu')  # Force CPU usage
-            return jsonify({
-                "message": f"Fallback model loaded on CPU: {FALLBACK_MODEL}",
-                "model_path": FALLBACK_MODEL,
-                "model_type": "pretrained",
-                "device": "cpu",
-                "warning": f"Custom model not found at {model_path}",
-                "timestamp": datetime.now().isoformat()
-            })
+        # Load the model from specified path
+        model = YOLO(model_path)
+        model.to('cpu')  # Force CPU usage
+        return jsonify({
+            "message": f"Model loaded successfully on CPU: {model_path}",
+            "model_path": model_path,
+            "model_type": "custom_trained",
+            "device": "cpu",
+            "timestamp": datetime.now().isoformat()
+        })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
