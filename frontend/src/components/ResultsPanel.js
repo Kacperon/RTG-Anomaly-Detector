@@ -3,30 +3,8 @@ import { AlertTriangle, CheckCircle, Download, FileText } from 'lucide-react';
 import apiService from '../services/apiService';
 
 const ResultsPanel = ({ results, uploadedFile, onAnalysisComplete, isAnalyzing }) => {
-  // Real analysis using API instead of mock
-  useEffect(() => {
-    if (isAnalyzing && uploadedFile) {
-      const performAnalysis = async () => {
-        try {
-          // Use real API service
-          const analysisResults = await apiService.uploadAndAnalyze(uploadedFile);
-          onAnalysisComplete(analysisResults);
-        } catch (error) {
-          console.error('Analysis failed:', error);
-          // On error, show error message
-          onAnalysisComplete({
-            analysis_complete: true,
-            detection_count: 0,
-            detections: [],
-            error: error.message,
-            timestamp: new Date().toISOString()
-          });
-        }
-      };
-
-      performAnalysis();
-    }
-  }, [isAnalyzing, uploadedFile, onAnalysisComplete]);
+  // Usuwamy automatyczną analizę - będzie wykonana w App.js
+  // useEffect do analizy jest teraz niepotrzebny
 
   if (!uploadedFile) {
     return (
@@ -125,6 +103,15 @@ const ResultsPanel = ({ results, uploadedFile, onAnalysisComplete, isAnalyzing }
   }
 
   const hasAnomalies = results.detection_count > 0;
+  const detections = results.detections || results.anomalies || [];
+  
+  console.log('=== ResultsPanel Debug ===');
+  console.log('results:', results);
+  console.log('hasAnomalies:', hasAnomalies);
+  console.log('detection_count:', results.detection_count);
+  console.log('detections array:', detections);
+  console.log('detections length:', detections.length);
+  console.log('=========================');
 
   // Funkcja pobierania raportu
   const downloadReport = async (format) => {
@@ -188,12 +175,24 @@ const ResultsPanel = ({ results, uploadedFile, onAnalysisComplete, isAnalyzing }
             <div className="text-sm text-gray-600 mt-1">Wykryte anomalie</div>
           </div>
           
-          {results.detections.length > 0 && (
+          {detections && detections.length > 0 && (
             <div className="bg-gray-50 rounded-lg p-4 text-center">
               <div className="text-3xl font-bold text-blue-600">
-                {Math.max(...results.detections.map(d => d.confidence)).toFixed(2)}
+                {Math.max(...detections.map(d => d.confidence || 0.5)).toFixed(2)}
               </div>
               <div className="text-sm text-gray-600 mt-1">Maksymalna pewność</div>
+            </div>
+          )}
+
+          {/* Informacja o metodzie analizy i heatmapie */}
+          {results.method === 'comparison_based' && (
+            <div className="bg-blue-50 rounded-lg p-4 text-center">
+              <div className="text-sm font-medium text-blue-800">
+                {results.heatmap_image ? '🔥 Z Heatmapą' : '📊 Analiza Porównawcza'}
+              </div>
+              <div className="text-xs text-blue-600 mt-1">
+                {results.ssim_score ? `SSIM: ${results.ssim_score.toFixed(3)}` : 'Porównanie wzorcowe'}
+              </div>
             </div>
           )}
         </div>
@@ -221,8 +220,8 @@ const ResultsPanel = ({ results, uploadedFile, onAnalysisComplete, isAnalyzing }
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {hasAnomalies ? (
-                results.detections.map((detection, index) => (
+              {detections && detections.length > 0 ? (
+                detections.map((detection, index) => (
                   <tr key={index} className="hover:bg-gray-50">
                     <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
                       #{detection.id || index + 1}
@@ -230,16 +229,22 @@ const ResultsPanel = ({ results, uploadedFile, onAnalysisComplete, isAnalyzing }
                     <td className="px-4 py-3 whitespace-nowrap text-sm">
                       <div className="flex items-center">
                         <div className={`w-2 h-2 rounded-full mr-2 ${
-                          detection.confidence > 0.7 ? 'bg-red-500' : 
-                          detection.confidence > 0.4 ? 'bg-orange-500' : 'bg-yellow-500'
+                          (detection.confidence || 0.5) > 0.7 ? 'bg-red-500' : 
+                          (detection.confidence || 0.5) > 0.4 ? 'bg-orange-500' : 'bg-yellow-500'
                         }`}></div>
                         <span className="font-medium text-gray-900">
-                          {(detection.confidence * 100).toFixed(1)}%
+                          {((detection.confidence || 0.5) * 100).toFixed(1)}%
                         </span>
                       </div>
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">
-                      ({detection.bbox[0]}, {detection.bbox[1]})
+                      {detection.bbox && detection.bbox.length >= 2 ? (
+                        `(${detection.bbox[0]}, ${detection.bbox[1]})`
+                      ) : detection.center && detection.center.length >= 2 ? (
+                        `(${detection.center[0]}, ${detection.center[1]})`
+                      ) : (
+                        '(N/A, N/A)'
+                      )}
                       {detection.area && (
                         <span className="text-xs text-gray-400 ml-2">
                           {detection.area}px²

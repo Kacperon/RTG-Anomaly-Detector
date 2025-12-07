@@ -23,35 +23,57 @@ import pickle
 class ImageMatcher:
     """Znajduje najbardziej podobny obraz wzorcowy"""
     
-    def __init__(self, reference_dir: str):
+    def __init__(self, reference_dir: str, processed_dir: str = None):
         """
         Args:
             reference_dir: Katalog z obrazami wzorcowymi (czystymi)
+            processed_dir: Dodatkowy katalog z przetworzonymi obrazami (opcjonalny)
         """
         self.reference_dir = Path(reference_dir)
+        self.processed_dir = Path(processed_dir) if processed_dir else None
         self.reference_images = []
         self.reference_features = []
         self._load_references()
     
     def _load_references(self):
-        """Ładuje wszystkie obrazy wzorcowe"""
+        """Ładuje wszystkie obrazy wzorcowe z głównego i dodatkowego katalogu"""
         print(f"📁 Ładowanie obrazów wzorcowych z: {self.reference_dir}")
         
-        for root, dirs, files in os.walk(self.reference_dir):
-            for file in files:
-                if file.endswith('.bmp') and 'czarno' not in file.lower():
-                    img_path = Path(root) / file
-                    img = cv2.imread(str(img_path), cv2.IMREAD_GRAYSCALE)
-                    if img is not None:
-                        # Oblicz features dla szybszego dopasowywania
-                        features = self._extract_features(img)
-                        self.reference_images.append({
-                            'path': img_path,
-                            'image': img,
-                            'features': features
-                        })
+        # Lista katalogów do przeszukania
+        directories_to_search = [self.reference_dir]
+        
+        # Dodaj katalog z przetworzonymi obrazami jeśli istnieje
+        if self.processed_dir and self.processed_dir.exists():
+            directories_to_search.append(self.processed_dir)
+            print(f"📁 Dodatkowo przeszukuję: {self.processed_dir}")
+        
+        # Przeszukaj wszystkie katalogi
+        for search_dir in directories_to_search:
+            for root, dirs, files in os.walk(search_dir):
+                for file in files:
+                    # Akceptuj .bmp i inne formaty obrazów, ignoruj pliki z 'czarno' w nazwie
+                    if (file.lower().endswith(('.bmp', '.jpg', '.jpeg', '.png')) and 
+                        'czarno' not in file.lower()):
+                        
+                        img_path = Path(root) / file
+                        img = cv2.imread(str(img_path), cv2.IMREAD_GRAYSCALE)
+                        if img is not None:
+                            # Oblicz features dla szybszego dopasowywania
+                            features = self._extract_features(img)
+                            self.reference_images.append({
+                                'path': img_path,
+                                'image': img,
+                                'features': features,
+                                'source': 'processed' if search_dir == self.processed_dir else 'original'
+                            })
         
         print(f"✅ Załadowano {len(self.reference_images)} obrazów wzorcowych")
+        
+        # Podsumowanie źródeł
+        original_count = sum(1 for img in self.reference_images if img['source'] == 'original')
+        processed_count = sum(1 for img in self.reference_images if img['source'] == 'processed')
+        print(f"   📂 Oryginalne: {original_count}")
+        print(f"   🔧 Przetworzone: {processed_count}")
     
     def _extract_features(self, img: np.ndarray) -> Dict:
         """Wyodrębnia cechy obrazu do porównywania"""
@@ -162,6 +184,8 @@ class ImageAligner:
     @staticmethod
     def _align_ecc(reference: np.ndarray, image: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """Wyrównanie ECC (Enhanced Correlation Coefficient)"""
+        print("🔧 Rozpoczynanie wyrównywania ECC...")
+        
         # Konwertuj do float32
         ref_gray = reference.astype(np.float32)
         img_gray = image.astype(np.float32)
@@ -170,16 +194,18 @@ class ImageAligner:
         warp_mode = cv2.MOTION_AFFINE
         warp_matrix = np.eye(2, 3, dtype=np.float32)
         
-        # Kryteria zakończenia
-        criteria = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 5000, 1e-6)
+        # Kryteria zakończenia - bardziej liberalne dla szybkości
+        criteria = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 1000, 1e-4)
         
         try:
-            # Wyrównaj obrazy
+            print("🔄 Wykonywanie findTransformECC...")
+            # Wyrównaj obrazy z timeout
             _, warp_matrix = cv2.findTransformECC(
                 ref_gray, img_gray, warp_matrix, warp_mode, criteria, 
-                inputMask=None, gaussFiltSize=5
+                inputMask=None, gaussFiltSize=3
             )
             
+            print("✅ ECC zakończone pomyślnie")
             # Zastosuj transformację
             aligned = cv2.warpAffine(
                 image, warp_matrix, (reference.shape[1], reference.shape[0]),
@@ -190,7 +216,12 @@ class ImageAligner:
             
         except Exception as e:
             print(f"⚠️ Wyrównanie ECC nie powiodło się: {e}, zwracam oryginalny obraz")
-            return image, np.eye(2, 3, dtype=np.float32)
+            # Fallback - prosta korekta rozmiaru
+            if reference.shape != image.shape:
+                aligned = cv2.resize(image, (reference.shape[1], reference.shape[0]))
+            else:
+                aligned = image.copy()
+            return aligned, np.eye(2, 3, dtype=np.float32)
     
     @staticmethod
     def _align_feature(reference: np.ndarray, image: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
@@ -239,19 +270,23 @@ class ImageAligner:
 class AnomalyDetector:
     """Wykrywa anomalie przez porównanie obrazów"""
     
-    def __init__(self, threshold: float = 25, min_area: int = 300, max_area: int = 50000):
+    def __init__(self, threshold: float = 25, min_area: int = 300, max_area: int = 50000,
+                 background_threshold: int = 240):
         """
         Args:
             threshold: Próg różnicy pikseli
             min_area: Minimalna powierzchnia anomalii (piksele)
             max_area: Maksymalna powierzchnia anomalii (piksele)
+            background_threshold: Próg dla wykrywania białego tła (0-255)
         """
         self.threshold = threshold
         self.min_area = min_area
         self.max_area = max_area
+        self.background_threshold = background_threshold
     
     def detect_anomalies(self, reference: np.ndarray, image: np.ndarray,
-                        use_ssim: bool = True) -> Dict:
+                        use_ssim: bool = True, ignore_background: bool = True,
+                        background_method: str = 'otsu') -> Dict:
         """
         Wykryj anomalie porównując dwa obrazy
         
@@ -259,6 +294,8 @@ class AnomalyDetector:
             reference: Obraz wzorcowy (czysty)
             image: Obraz do sprawdzenia
             use_ssim: Czy użyć SSIM zamiast prostej różnicy
+            ignore_background: Czy ignorować białe tło podczas detekcji
+            background_method: Metoda wykrywania tła ('otsu', 'adaptive', 'threshold')
             
         Returns:
             Słownik z wynikami detekcji
@@ -281,7 +318,8 @@ class AnomalyDetector:
             diff_map = cv2.absdiff(ref_processed, img_processed)
         
         # Wykryj anomalie
-        anomalies = self._find_anomalies(diff_map)
+        reference_for_mask = ref_processed if ignore_background else None
+        anomalies = self._find_anomalies(diff_map, reference_for_mask)
         
         return {
             'difference_map': diff_map,
@@ -301,11 +339,61 @@ class AnomalyDetector:
         
         return img_denoised
     
-    def _find_anomalies(self, diff_map: np.ndarray) -> List[Dict]:
-        """Znajdź regiony anomalii na mapie różnic"""
+    def _create_background_mask(self, img: np.ndarray, method: str = 'otsu') -> np.ndarray:
+        """
+        Tworzy maskę tła dla obrazu RTG
+        
+        Args:
+            img: Obraz w skali szarości
+            method: Metoda wykrywania tła ('otsu', 'adaptive', 'threshold')
+            
+        Returns:
+            Maska binarna (True dla obszarów nie-tła)
+        """
+        if method == 'otsu':
+            # Otsu thresholding - automatyczne wykrywanie progu
+            _, binary = cv2.threshold(img, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+            # Inwersja - chcemy maskę obszarów nie-tła
+            mask = binary > 0
+            
+        elif method == 'adaptive':
+            # Adaptive thresholding
+            binary = cv2.adaptiveThreshold(img, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
+                                         cv2.THRESH_BINARY, 11, 2)
+            mask = binary > 0
+            
+        elif method == 'threshold':
+            # Stały próg dla białego tła
+            mask = img < self.background_threshold
+            
+        else:
+            # Fallback - prosty próg
+            mask = img < self.background_threshold
+        
+        # Operacje morfologiczne do oczyszczenia maski
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
+        mask_cleaned = cv2.morphologyEx(mask.astype(np.uint8), cv2.MORPH_CLOSE, kernel)
+        mask_cleaned = cv2.morphologyEx(mask_cleaned, cv2.MORPH_OPEN, kernel)
+        
+        return mask_cleaned.astype(bool)
+    
+    def _find_anomalies(self, diff_map: np.ndarray, reference_img: np.ndarray = None) -> List[Dict]:
+        """Znajdź regiony anomalii na mapie różnic, ignorując prawie białe tło"""
         # Progowanie
         _, binary = cv2.threshold(diff_map, self.threshold, 255, cv2.THRESH_BINARY)
         
+        # Maskowanie tła - ignoruj prawie białe piksele (tło RTG)
+        if reference_img is not None:
+            # Utwórz maskę obszarów nie-tła (ROI - Region of Interest)
+            roi_mask = self._create_background_mask(reference_img, method='otsu')
+            
+            # Zastosuj maskę - usuń anomalie w obszarach białego tła
+            binary = binary & roi_mask.astype(np.uint8) * 255
+            
+            print(f"🎯 Zastosowano maskę ROI (obszary nie-tła)")
+            print(f"   Procent obszaru ROI: {np.sum(roi_mask) / roi_mask.size * 100:.1f}%")
+        else:
+            print("⚠️ Brak obrazu referencyjnego - pomijam maskowanie tła")
         # Operacje morfologiczne
         kernel_open = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
         kernel_close = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (9, 9))
@@ -357,7 +445,8 @@ class AnomalyReportGenerator:
     @staticmethod
     def generate_report(original_img: np.ndarray, reference_img: np.ndarray,
                        aligned_img: np.ndarray, detection_result: Dict,
-                       output_path: str, metadata: Dict = None) -> str:
+                       output_path: str, metadata: Dict = None,
+                       reference_info: Dict = None) -> str:
         """
         Generuje kompletny raport wizualny
         
@@ -383,7 +472,7 @@ class AnomalyReportGenerator:
         # Utwórz grid z wizualizacjami
         report_img = AnomalyReportGenerator._create_report_grid(
             original_img, reference_img, aligned_img,
-            diff_colored, annotated, detection_result
+            diff_colored, annotated, detection_result, reference_info
         )
         
         # Zapisz raport obrazowy
@@ -448,7 +537,8 @@ class AnomalyReportGenerator:
     @staticmethod
     def _create_report_grid(original: np.ndarray, reference: np.ndarray,
                            aligned: np.ndarray, diff_colored: np.ndarray,
-                           annotated: np.ndarray, detection_result: Dict) -> np.ndarray:
+                           annotated: np.ndarray, detection_result: Dict,
+                           reference_info: Dict = None) -> np.ndarray:
         """Tworzy grid z wszystkimi wizualizacjami"""
         # Konwertuj grayscale do BGR jeśli potrzeba
         def to_bgr(img):
@@ -468,7 +558,7 @@ class AnomalyReportGenerator:
         diff_colored = cv2.resize(diff_colored, (w, h))
         annotated = cv2.resize(annotated, (w, h))
         
-        # Dodaj etykiety
+        # Dodaj etykiety z informacjami o dopasowaniu
         def add_label(img, text, color=(255, 255, 255)):
             labeled = img.copy()
             cv2.rectangle(labeled, (0, 0), (w, 50), (0, 0, 0), -1)
@@ -476,36 +566,62 @@ class AnomalyReportGenerator:
                        cv2.FONT_HERSHEY_SIMPLEX, 1.0, color, 2)
             return labeled
         
+        # Przygotuj etykiety z dodatkowymi informacjami
+        reference_label = "Obraz wzorcowy"
+        if reference_info:
+            ref_name = reference_info.get('name', 'nieznany')
+            ref_similarity = reference_info.get('similarity', 0)
+            ref_source = reference_info.get('source', 'original')
+            source_emoji = "🔧" if ref_source == 'processed' else "📁"
+            reference_label = f"{source_emoji} {ref_name[:20]} ({ref_similarity:.1%})"
+        
         original = add_label(original, "Obraz testowy")
-        reference = add_label(reference, "Obraz wzorcowy")
+        reference = add_label(reference, reference_label, (0, 255, 255))  # Cyan dla wyróżnienia
         aligned = add_label(aligned, "Wyrownany")
         diff_colored = add_label(diff_colored, "Mapa roznic (heatmap)")
         annotated = add_label(annotated, f"Wykryte anomalie: {len(detection_result['anomalies'])}", 
                             (0, 255, 0) if detection_result['has_anomaly'] else (255, 255, 255))
         
-        # Grid 2x3
+        # Grid 2x3 - lepsze ułożenie
         row1 = np.hstack([original, reference, aligned])
-        row2 = np.hstack([diff_colored, annotated, annotated])  # Duplikuj ostatni dla symetrii
+        row2 = np.hstack([diff_colored, annotated, np.zeros_like(annotated)])  # Trzecia kolumna pusta
         
         grid = np.vstack([row1, row2])
         
-        # Dodaj podsumowanie na dole
-        summary_height = 100
+        # Dodaj szczegółowe podsumowanie na dole
+        summary_height = 120
         summary = np.zeros((summary_height, grid.shape[1], 3), dtype=np.uint8)
         
         anomaly_count = len(detection_result['anomalies'])
         status = "ANOMALIA WYKRYTA!" if detection_result['has_anomaly'] else "BRAK ANOMALII"
         status_color = (0, 0, 255) if detection_result['has_anomaly'] else (0, 255, 0)
         
-        cv2.putText(summary, status, (20, 40),
-                   cv2.FONT_HERSHEY_SIMPLEX, 1.5, status_color, 3)
-        cv2.putText(summary, f"Liczba anomalii: {anomaly_count}", (20, 80),
-                   cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255), 2)
+        # Linia 1: Status
+        cv2.putText(summary, status, (20, 30),
+                   cv2.FONT_HERSHEY_SIMPLEX, 1.2, status_color, 3)
         
+        # Linia 2: Liczba anomalii
+        cv2.putText(summary, f"Liczba anomalii: {anomaly_count}", (20, 60),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+        
+        # Linia 3: Informacje o dopasowaniu
+        if reference_info:
+            match_text = f"Dopasowanie: {reference_info.get('name', 'nieznany')[:30]}"
+            cv2.putText(summary, match_text, (20, 90),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+        
+        # Po prawej: SSIM
         if detection_result.get('ssim_score') is not None:
             cv2.putText(summary, f"SSIM: {detection_result['ssim_score']:.4f}", 
-                       (grid.shape[1] - 300, 40),
-                       cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255), 2)
+                       (grid.shape[1] - 200, 40),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+        
+        # Po prawej: Podobieństwo
+        if reference_info:
+            similarity_text = f"Podobienstwo: {reference_info.get('similarity', 0):.1%}"
+            cv2.putText(summary, similarity_text,
+                       (grid.shape[1] - 200, 70),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
         
         final = np.vstack([grid, summary])
         
@@ -541,13 +657,19 @@ class AnomalyReportGenerator:
 class RTGAnomalySystem:
     """Główny system detekcji anomalii RTG"""
     
-    def __init__(self, reference_dir: str, output_dir: str = 'anomaly_reports'):
+    def __init__(self, reference_dir: str, output_dir: str = 'anomaly_reports', 
+                 processed_dir: str = None):
         """
         Args:
             reference_dir: Katalog z obrazami wzorcowymi (czystymi)
             output_dir: Katalog do zapisywania raportów
+            processed_dir: Katalog z przetworzonymi obrazami (opcjonalny)
         """
-        self.matcher = ImageMatcher(reference_dir)
+        # Automatycznie dodaj katalog z przetworzonymi obrazami jeśli nie podano
+        if processed_dir is None:
+            processed_dir = 'data-processing/processed_clean_data'
+        
+        self.matcher = ImageMatcher(reference_dir, processed_dir)
         self.aligner = ImageAligner()
         self.detector = AnomalyDetector()
         self.output_dir = Path(output_dir)
@@ -555,10 +677,13 @@ class RTGAnomalySystem:
         
         print(f"🚀 System detekcji anomalii RTG zainicjalizowany")
         print(f"📂 Obrazy wzorcowe: {reference_dir}")
+        if processed_dir:
+            print(f"🔧 Przetworzone: {processed_dir}")
         print(f"📂 Raporty: {output_dir}")
     
     def process_image(self, image_path: str, use_alignment: bool = True,
-                     use_ssim: bool = True, save_report: bool = True) -> Dict:
+                     use_ssim: bool = True, save_report: bool = True,
+                     ignore_background: bool = True) -> Dict:
         """
         Przetwórz obraz i wykryj anomalie
         
@@ -567,6 +692,7 @@ class RTGAnomalySystem:
             use_alignment: Czy wyrównywać obrazy
             use_ssim: Czy użyć SSIM
             save_report: Czy zapisać raport
+            ignore_background: Czy ignorować białe tło podczas detekcji
             
         Returns:
             Słownik z wynikami analizy
@@ -595,7 +721,32 @@ class RTGAnomalySystem:
         # Wyrównaj obrazy
         if use_alignment:
             print("⚙️ Wyrównywanie obrazów...")
-            aligned_img, transform = self.aligner.align_images(reference_img, img)
+            try:
+                # Spróbuj szybkiego wyrównania najpierw
+                if reference_img.shape != img.shape:
+                    print("📐 Dopasowywanie rozmiarów...")
+                    img_resized = cv2.resize(img, (reference_img.shape[1], reference_img.shape[0]))
+                else:
+                    img_resized = img
+                
+                # Sprawdź czy obrazy są podobne - jeśli bardzo podobne, pomiń ECC
+                similarity_quick = cv2.matchTemplate(reference_img.astype(np.float32), 
+                                                   img_resized.astype(np.float32), 
+                                                   cv2.TM_CCOEFF_NORMED)[0,0]
+                
+                if similarity_quick > 0.95:
+                    print(f"🚀 Obrazy bardzo podobne ({similarity_quick:.3f}), pomijam dokładne wyrównywanie")
+                    aligned_img = img_resized
+                    transform = np.eye(2, 3, dtype=np.float32)
+                else:
+                    print(f"🔧 Podobieństwo: {similarity_quick:.3f}, uruchamiam dokładne wyrównywanie...")
+                    aligned_img, transform = self.aligner.align_images(reference_img, img_resized)
+                    
+            except Exception as e:
+                print(f"❌ Błąd podczas wyrównywania: {e}")
+                print("🔄 Używam podstawowego dopasowania rozmiaru...")
+                aligned_img = cv2.resize(img, (reference_img.shape[1], reference_img.shape[0]))
+                transform = None
         else:
             aligned_img = cv2.resize(img, (reference_img.shape[1], reference_img.shape[0]))
             transform = None
@@ -603,7 +754,8 @@ class RTGAnomalySystem:
         # Wykryj anomalie
         print("🔬 Wykrywanie anomalii...")
         detection_result = self.detector.detect_anomalies(
-            reference_img, aligned_img, use_ssim=use_ssim
+            reference_img, aligned_img, use_ssim=use_ssim, 
+            ignore_background=ignore_background
         )
         
         print(f"{'❌' if detection_result['has_anomaly'] else '✅'} "
@@ -616,16 +768,27 @@ class RTGAnomalySystem:
             report_path = self.output_dir / f"report_{img_name}_{timestamp}.png"
             
             print(f"📊 Generowanie raportu...")
+            
+            # Przygotuj informacje o dopasowaniu dla raportu
+            reference_info = {
+                'name': best_match['path'].name,
+                'similarity': similarity,
+                'source': best_match.get('source', 'original'),
+                'path': str(best_match['path'])
+            }
+            
             AnomalyReportGenerator.generate_report(
                 img, reference_img, aligned_img, detection_result,
                 str(report_path),
                 metadata={
                     'input_image': image_path,
                     'reference_image': str(best_match['path']),
+                    'reference_source': best_match.get('source', 'original'),
                     'similarity': similarity,
                     'alignment_used': use_alignment,
                     'ssim_used': use_ssim
-                }
+                },
+                reference_info=reference_info
             )
             print(f"💾 Raport zapisany: {report_path}")
         
@@ -674,7 +837,8 @@ class RTGAnomalySystem:
 
 # Funkcja pomocnicza do szybkiego użycia
 def quick_detect(image_path: str, reference_dir: str = 'data/czyste',
-                output_dir: str = 'anomaly_reports') -> Dict:
+                output_dir: str = 'anomaly_reports', 
+                processed_dir: str = 'data-processing/processed_clean_data') -> Dict:
     """
     Szybka detekcja anomalii dla pojedynczego obrazu
     
@@ -682,11 +846,12 @@ def quick_detect(image_path: str, reference_dir: str = 'data/czyste',
         image_path: Ścieżka do obrazu
         reference_dir: Katalog z obrazami wzorcowymi
         output_dir: Katalog do zapisywania raportów
+        processed_dir: Katalog z przetworzonymi obrazami
         
     Returns:
         Wyniki detekcji
     """
-    system = RTGAnomalySystem(reference_dir, output_dir)
+    system = RTGAnomalySystem(reference_dir, output_dir, processed_dir)
     return system.process_image(image_path)
 
 
@@ -699,7 +864,8 @@ if __name__ == "__main__":
     # Inicjalizuj system
     system = RTGAnomalySystem(
         reference_dir='data/czyste',
-        output_dir='anomaly_reports'
+        output_dir='anomaly_reports',
+        processed_dir='data-processing/processed_clean_data'
     )
     
     # Testuj na obrazach z anomaliami

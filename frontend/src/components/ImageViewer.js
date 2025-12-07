@@ -1,8 +1,9 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ZoomIn, ZoomOut, RotateCcw, Download, FileImage, Maximize, X } from 'lucide-react';
 
 const ImageViewer = ({ uploadedFile, analysisResults, isAnalyzing }) => {
   const [showOriginal, setShowOriginal] = useState(true);
+  const [viewMode, setViewMode] = useState('original'); // 'original', 'anomalies', 'heatmap'
   const [isFullscreen, setIsFullscreen] = useState(false);
   
   // Fullscreen state
@@ -13,8 +14,18 @@ const ImageViewer = ({ uploadedFile, analysisResults, isAnalyzing }) => {
 
   // Automatycznie przełącz na widok z anomaliami gdy raport jest gotowy
   useEffect(() => {
-    if (analysisResults && analysisResults.annotated_image) {
-      setShowOriginal(false);
+    console.log('ImageViewer useEffect triggered:', {
+      analysisResults: !!analysisResults,
+      annotated_image: !!analysisResults?.annotated_image,
+      heatmap_image: !!analysisResults?.heatmap_image
+    });
+    
+    if (analysisResults) {
+      if (analysisResults.heatmap_image) {
+        console.log('Switching to anomalies view (heatmap with anomalies available)');
+        setShowOriginal(false);
+        setViewMode('anomalies');
+      }
     }
   }, [analysisResults]);
 
@@ -126,32 +137,92 @@ const ImageViewer = ({ uploadedFile, analysisResults, isAnalyzing }) => {
   };
 
   const getImageSrc = () => {
-    if (analysisResults && !showOriginal) {
-      return `data:image/png;base64,${analysisResults.annotated_image}`;
-    }
-    if (uploadedFile) {
+    console.log('getImageSrc called:', {
+      showOriginal,
+      viewMode,
+      analysisResults: !!analysisResults,
+      heatmap_image: !!analysisResults?.heatmap_image,
+      original_image: !!analysisResults?.original_image,
+      uploadedFile: !!uploadedFile
+    });
+    
+    // Jeśli pokazujemy oryginalny obraz
+    if (showOriginal && uploadedFile && uploadedFile.preview) {
+      console.log('Using original uploaded file preview');
       return uploadedFile.preview;
     }
+    
+    // Jeśli mamy wyniki analizy i nie pokazujemy oryginału
+    if (analysisResults && !showOriginal) {
+      let imageSrc = null;
+      
+      switch (viewMode) {
+        case 'anomalies':
+          // PROSTY SPOSÓB - używaj heatmap_image dla widoku anomalii
+          if (analysisResults.heatmap_image) {
+            imageSrc = `data:image/png;base64,${analysisResults.heatmap_image}`;
+            console.log('Using heatmap image for anomalies view, length:', analysisResults.heatmap_image.length);
+          }
+          break;
+        default:
+          // Fallback - użyj heatmap_image jeśli dostępny
+          if (analysisResults.heatmap_image) {
+            imageSrc = `data:image/png;base64,${analysisResults.heatmap_image}`;
+            console.log('Using fallback heatmap image, length:', analysisResults.heatmap_image.length);
+          }
+      }
+      
+      if (imageSrc) {
+        console.log('Returning processed image source');
+        return imageSrc;
+      }
+    }
+    
+    // Fallback do oryginalnego przesłanego pliku
+    if (uploadedFile && uploadedFile.preview) {
+      console.log('Using uploaded file preview as fallback');
+      return uploadedFile.preview;
+    }
+    
+    console.log('No image source available');
     return null;
   };
 
   const handleDownload = () => {
     if (analysisResults && !showOriginal) {
       const link = document.createElement('a');
-      link.href = `data:image/png;base64,${analysisResults.annotated_image}`;
-      link.download = `anomalie_${uploadedFile?.name || 'obraz'}.png`;
-      link.click();
+      let imageData, filename;
+      
+      switch (viewMode) {
+        case 'anomalies':
+          if (analysisResults.heatmap_image) {
+            imageData = analysisResults.heatmap_image;
+            filename = `anomalie_heatmapa_${uploadedFile?.name || 'obraz'}.png`;
+          }
+          break;
+        default:
+          if (analysisResults.heatmap_image) {
+            imageData = analysisResults.heatmap_image;
+            filename = `anomalie_heatmapa_${uploadedFile?.name || 'obraz'}.png`;
+          }
+      }
+      
+      if (imageData) {
+        link.href = `data:image/png;base64,${imageData}`;
+        link.download = filename;
+        link.click();
+      }
     }
   };
 
   const imageSrc = getImageSrc();
 
-  // Przełącznik oryginalny/z anomaliami
+  // Przełącznik oryginalny/z anomaliami/heatmapa
   const ViewToggle = ({ dark = false }) => (
     analysisResults && (
       <div className={`flex rounded-lg overflow-hidden ${dark ? 'bg-black/70' : 'bg-white border shadow-sm'}`}>
         <button
-          onClick={() => setShowOriginal(true)}
+          onClick={() => { setShowOriginal(true); setViewMode('original'); }}
           className={`px-4 py-2 text-sm font-medium transition-colors ${
             showOriginal 
               ? 'bg-primary-600 text-white' 
@@ -161,11 +232,14 @@ const ImageViewer = ({ uploadedFile, analysisResults, isAnalyzing }) => {
           Oryginalny
         </button>
         <button
-          onClick={() => setShowOriginal(false)}
+          onClick={() => { setShowOriginal(false); setViewMode('anomalies'); }}
+          disabled={!analysisResults.heatmap_image}
           className={`px-4 py-2 text-sm font-medium transition-colors ${
-            !showOriginal 
+            !showOriginal && viewMode === 'anomalies'
               ? 'bg-primary-600 text-white' 
-              : dark ? 'text-white hover:bg-white/20' : 'text-gray-600 hover:bg-gray-100'
+              : !analysisResults.heatmap_image
+                ? 'text-gray-400 cursor-not-allowed'
+                : dark ? 'text-white hover:bg-white/20' : 'text-gray-600 hover:bg-gray-100'
           }`}
         >
           Z anomaliami
@@ -242,6 +316,11 @@ const ImageViewer = ({ uploadedFile, analysisResults, isAnalyzing }) => {
             src={imageSrc}
             alt="RTG scan"
             draggable={false}
+            onLoad={() => console.log('✅ Fullscreen image loaded successfully')}
+            onError={(e) => {
+              console.error('❌ Fullscreen image failed to load:', e);
+              console.error('Image src:', imageSrc);
+            }}
             style={{ 
               transform: `translate(${position.x}px, ${position.y}px) scale(${zoom})`,
               maxWidth: '100%',
@@ -315,6 +394,11 @@ const ImageViewer = ({ uploadedFile, analysisResults, isAnalyzing }) => {
                 alt="RTG scan"
                 className="max-w-full max-h-[560px] object-contain rounded-lg shadow-2xl"
                 draggable={false}
+                onLoad={() => console.log('✅ Normal view image loaded successfully')}
+                onError={(e) => {
+                  console.error('❌ Normal view image failed to load:', e);
+                  console.error('Image src:', imageSrc?.substring(0, 100) + '...');
+                }}
               />
             </div>
           </div>

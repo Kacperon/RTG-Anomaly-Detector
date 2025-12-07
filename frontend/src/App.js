@@ -64,15 +64,25 @@ function App() {
         const modelResult = await apiService.loadModel();
         setModelLoaded(true);
         addStatusMessage(`Model załadowany: ${modelResult.model_type}`, 'success');
-        setIsAnalyzing(true);
-        addStatusMessage('Rozpoczynanie analizy...', 'info');
       } catch (error) {
         addStatusMessage(`Błąd ładowania modelu: ${error.message}`, 'error');
         return;
       }
-    } else {
+    }
+    
+    if (uploadedFile) {
       setIsAnalyzing(true);
-      addStatusMessage('Rozpoczynanie analizy...', 'info');
+      addStatusMessage('Rozpoczynanie analizy porównawczej z heatmapą...', 'info');
+      
+      try {
+        // Użyj analizy porównawczej zamiast standardowej
+        const results = await apiService.uploadAndAnalyzeComparison(uploadedFile);
+        handleAnalysisComplete(results);
+        addStatusMessage('Analiza zakończona pomyślnie!', 'success');
+      } catch (error) {
+        setIsAnalyzing(false);
+        addStatusMessage(`Błąd analizy: ${error.message}`, 'error');
+      }
     }
   };
 

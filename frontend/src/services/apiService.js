@@ -92,23 +92,61 @@ class ApiService {
     }
   }
 
-  // Full upload and analyze workflow
-  async uploadAndAnalyze(file) {
+  // Analyze image using comparison method (with heatmap)
+  async analyzeImageComparison(fileId) {
+    try {
+      if (!this.isModelLoaded) {
+        throw new Error('Model nie jest załadowany');
+      }
+
+      const response = await fetch(`${API_BASE_URL}/analyze-comparison`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          file_id: fileId,
+          use_alignment: false,  // Wyłącz dla szybkości
+          use_ssim: true,
+          fast_mode: true
+        })
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `Analysis failed! status: ${response.status}`);
+      }
+      
+      return await response.json();
+    } catch (error) {
+      console.error('Image comparison analysis failed:', error);
+      throw new Error(error.message || 'Nie udało się przeanalizować obrazu metodą porównawczą');
+    }
+  }
+
+  // Full upload and analyze workflow using comparison method
+  async uploadAndAnalyzeComparison(file) {
     try {
       // Step 1: Upload file
       const uploadResult = await this.uploadFile(file);
       
-      // Step 2: Analyze
-      const analysisResult = await this.analyzeImage(uploadResult.file_id);
+      // Step 2: Analyze using comparison method
+      const analysisResult = await this.analyzeImageComparison(uploadResult.file_id);
       
       return {
         ...analysisResult,
         uploadInfo: uploadResult
       };
     } catch (error) {
-      console.error('Upload and analyze workflow failed:', error);
+      console.error('Upload and analyze comparison workflow failed:', error);
       throw error;
     }
+  }
+
+  // Backward compatibility - alias for old method name
+  async uploadAndAnalyze(file) {
+    // Redirect to new comparison method with heatmap
+    return await this.uploadAndAnalyzeComparison(file);
   }
 
   // Get model status
