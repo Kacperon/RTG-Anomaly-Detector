@@ -190,7 +190,3 @@ curl http://localhost:5000/api/health
 ## 📄 Licencja
 
 MIT License - see LICENSE file for details.
-
----
-
-**Made with ❤️ for medical professionals**
