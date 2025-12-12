@@ -186,7 +186,3 @@ curl http://localhost:5000/api/health
 3. Commit changes
 4. Push to branch
 5. Create Pull Request
-
-## 📄 Licencja
-
-MIT License - see LICENSE file for details.
